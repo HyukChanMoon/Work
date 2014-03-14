@@ -1,0 +1,534 @@
+<?php
+
+
+
+class GarrattCustom_Module extends Core_ModuleBase
+
+{
+
+	const _limitedStock = 20;
+
+	/**
+
+	* Creates the module information object
+
+	* @return Core_ModuleInfo
+
+	*/
+
+	protected function createModuleInfo()
+
+	{
+
+		return new Core_ModuleInfo(
+
+		"Garratt Custom Features Module",
+
+		"Custom features for the Garratt Website",
+
+		"Summit Creative");
+
+	}
+
+	
+
+	public function subscribeEvents()
+
+	{
+
+		Backend::$events->addEvent('shop:onExtendCustomerModel', $this, 'extend_customer_model');
+
+		Backend::$events->addEvent('shop:onExtendCustomerForm', $this, 'extend_customer_form');
+
+		Backend::$events->addEvent('shop:onGetCustomerFieldOptions', $this, 'get_customer_field_options');
+
+		
+
+		Backend::$events->addEvent('shop:onExtendProductModel', $this, 'extend_product_model');
+
+		Backend::$events->addEvent('shop:onExtendProductForm', $this, 'extend_product_form');
+
+		Backend::$events->addEvent('shop:onGetProductFieldOptions', $this, 'get_product_field_options');
+
+		
+
+		Backend::$events->addEvent('shop:onBeforeOrderCustomerStatusMessageSent', $this, 'before_send_customer_message');
+
+	}
+
+	
+
+	public function before_send_customer_message($order, $status)
+
+	{
+
+		$customer = $order->customer;
+
+	
+
+		$hasNotSet = false;			//garrattcustom:email1_non_agency
+
+		$hasNonAgency = false;		//garrattcustom:email1_non_agency
+
+		$hasAgency1 = false;		//garrattcustom:email4_US
+
+		$hasAgency2 = false;		//garrattcustom:email3_UK
+
+		$hasAgency3 = false;		//garrattcustom:email2_UK
+
+		//GarrattPublishing
+
+		$hasGP = false;				//garrattcustom:email5_garrattpublishing
+
+		$hasLimitedStock = false;	//garrattcustom:email6_limited_stock
+
+		$hasPreOrder = false;		//garrattcustom:email7_preorder
+
+		$isGiftCertificate = false; //shop:order_thankyou
+
+		//else All in stock: garrattcustom:email8_in_stock
+
+		$emailPubDate=null;
+
+		
+
+		$cart_name = post('cart_name', 'main');
+
+		$cart_items = Shop_Cart::list_active_items($cart_name);
+
+
+
+		foreach ($order->items as $item) 
+
+		{
+
+			$product = $item->product;
+
+			if($product->product_type->code == 'gift') {
+
+				$isGiftCertificate = true;
+
+			}
+
+		}
+
+
+
+		foreach ($cart_items as $item) 
+
+		{
+
+			$product = $item->product;
+
+			if(!self::check_availability($product, $item->quantity, $item->options, false)) 
+
+			{
+
+				$busRule = $product->x_garrattcustom_business_rule;
+
+				if($busRule == '') {
+
+					$hasNotSet = true;
+
+				} else if($busRule == 'non-agency') {
+
+					$hasNonAgency = true;
+
+				} else if($busRule == 'agency1') {
+
+					$hasAgency1 = true;
+
+				} else if($busRule == 'agency2') {
+
+					$hasAgency2 = true;
+
+				} else if($busRule == 'agency3') {
+
+					$hasAgency3 = true;
+
+				} else if($busRule == 'garrattpublishing') {
+
+					$hasGP = true;
+
+				} else if($busRule == 'eBook') {
+					
+					$hasEBook = true;
+				}
+
+			}
+
+			
+
+			if(self::check_limited_stock($product, $item->quantity, $item->options, false)) {
+
+				$hasLimitedStock = true;
+
+			}
+
+			
+
+			$pubDate = $product->getAttribute('Published Date');
+
+			if(!empty($pubDate) && strtotime($pubDate) > time()) {
+
+				$hasPreOrder = true;
+
+				$emailPubDate = $pubDate;
+
+			}
+
+		}
+
+
+
+		if($isGiftCertificate) {
+
+			$template = System_EmailTemplate::create()->find_by_code('shop:order_thankyou');
+
+		} else if(($hasNotSet || $hasNonAgency) && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email1_non_agency');
+
+		} else if ($hasAgency3 && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email2_UK');
+
+		} else if ($hasAgency2 && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email3_UK');
+
+		} else if ($hasAgency1 && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email4_US');
+
+		} else if ($hasGP && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email5_garrattpublishing');
+
+		} else if ($hasLimitedStock && !$hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email6_limited_stock');
+
+		} else if ($hasPreOrder) {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email7_preorder');
+
+		} else {
+
+			$template = System_EmailTemplate::create()->find_by_code('garrattcustom:email8_in_stock');
+
+		}
+
+		
+
+		if ($template)
+
+		{
+
+			$items = Shop_OrderItem::create()->where('shop_order_id=?', $order->id)->order('shop_order_items.id')->find_all();
+
+			$email_scope_vars = array('order'=>$order, 'customer'=>$customer, 'items'=>$items);
+
+			$message = $customer->set_customer_email_vars($template->content);
+
+			$message = $order->set_order_email_vars($message);
+
+			$message = System_CompoundEmailVar::apply_scope_variables($message, 'shop:order', $email_scope_vars);
+
+			
+
+			if($emailPubDate) {
+
+				$message = str_replace('{publish_date}', $emailPubDate, $message);
+
+			}
+
+			
+
+			$template->send_to_customer($customer, $message);
+
+		}
+
+		return false;
+
+	}
+
+	
+
+	public static function check_availability($product, $total_quantity, $options, $option_keys)
+
+	{
+
+		if ($product->track_inventory)
+
+		{
+
+			$in_stock = Shop_OptionMatrix::get_property($options, 'in_stock', $product, $option_keys);
+
+			
+
+			if ($total_quantity > $in_stock)
+
+			{
+
+				return false;
+
+			}
+
+		}
+
+		return true;
+
+	}
+
+	
+
+	public static function check_limited_stock($product, $total_quantity, $options, $option_keys)
+
+	{
+
+		if ($product->track_inventory)
+
+		{
+
+			$in_stock = Shop_OptionMatrix::get_property($options, 'in_stock', $product, $option_keys);
+
+			
+
+			if ($in_stock < self::_limitedStock)
+
+			{
+
+				return true;
+
+			}
+
+		}
+
+		return false;
+
+	}
+
+	
+
+	public function extend_product_model($customer)
+
+	{
+
+		$customer->define_column('x_garrattcustom_business_rule', 'Business Rule')->validation()->fn('trim');
+
+		$customer->define_column('x_garrattcustom_product_not_available', 'Product Not Available');
+
+	}
+
+
+
+	public function extend_product_form($customer)
+
+	{
+
+		$customer->add_form_field('x_garrattcustom_business_rule','right')
+
+				->tab('Product')
+
+				->renderAs(frm_dropdown)
+
+				->sortOrder(21);
+
+		$customer->add_form_field('x_garrattcustom_product_not_available','left')
+
+				->tab('Product')
+
+				//->renderAs(frm_dropdown)
+
+				->sortOrder(1);
+
+	}
+
+	
+
+	public function get_product_field_options($field_name, $current_value)
+
+	{
+
+		if ($field_name == 'x_garrattcustom_business_rule') {
+
+			$options = array(
+
+				'ebook' => 'eBook',
+
+				'' => 'Not Set',
+
+				'non-agency' => 'non-agency',
+
+				'garrattpublishing' => 'garrattpublishing', 
+
+				'agency1' => 'agency1',
+
+				'agency2' => 'agency2',
+
+				'agency3' => 'agency3',
+
+			);
+
+			if ($current_value == -1)
+
+				return $options;
+
+
+
+			if (array_key_exists($current_value, $options))
+
+				return $options[$current_value];
+
+		}
+
+	}
+
+	
+
+	public function extend_customer_model($customer)
+
+	{
+
+		$customer->define_column('x_garrattcustom_denomination', 'Denomination')
+
+				->validation()
+
+				->required('Please select your denomination')
+
+				->fn('trim');
+
+		$customer->define_column('x_garrattcustom_customer_type', 'Customer type')
+
+				->validation()
+
+				->required('Please select a customer type')
+
+				->fn('trim');
+
+	}
+
+
+
+	public function extend_customer_form($customer)
+
+	{
+
+		$customer->add_form_field('x_garrattcustom_denomination','left')
+
+				->tab('Customer')
+
+				->renderAs(frm_dropdown)
+
+				->sortOrder(21);
+
+		$customer->add_form_field('x_garrattcustom_customer_type','right')
+
+				->tab('Customer')
+
+				->renderAs(frm_dropdown)
+
+				->sortOrder(22);
+
+	}
+
+	
+
+	
+
+	public function get_customer_field_options($field_name, $current_value)
+
+	{
+
+		if ($field_name == 'x_garrattcustom_denomination') {
+
+			$options = array(
+
+				'' => 'Please Select',
+
+				'Anglican' => 'Anglican',
+
+				'Catholic' => 'Catholic', 
+
+				'Ecumenical' => 'Ecumenical',
+
+				'Evangelical' => 'Evangelical',
+
+				'Lutheran' => 'Lutheran',
+
+				'Uniting' => 'Uniting',
+
+				'Other' => 'Other',
+
+			);
+
+			if ($current_value == -1)
+
+				return $options;
+
+
+
+			if (array_key_exists($current_value, $options))
+
+				return $options[$current_value];
+
+		}
+
+		if ($field_name == 'x_garrattcustom_customer_type') {
+
+			$options = array(
+
+				'' => 'Please Select',
+
+				'Church Institution' => 'Church Institution',
+
+				'CEO' => 'CEO', 
+
+				'Primary' => 'Primary',
+
+				'Secondary' => 'Secondary',
+
+				'Individual (Private)' => 'Individual (Private)',
+
+				'Priest/Minister' => 'Priest/Minister',
+
+				'Order/Religious' => 'Order/Religious',
+
+				'Parish' => 'Parish',
+
+				'Tertiary' => 'Tertiary',
+
+				'Welfare' => 'Welfare',
+
+				'Bookshop' => 'Bookshop',
+
+				'Retreat/Sp. Centre' => 'Retreat/Sp. Centre',
+
+				'Other' => 'Other',
+
+			);
+
+			if ($current_value == -1)
+
+				return $options;
+
+
+
+			if (array_key_exists($current_value, $options))
+
+				return $options[$current_value];
+
+		}
+
+	}
+
+	
+
+	
+
+}
+
+
+
+?>
