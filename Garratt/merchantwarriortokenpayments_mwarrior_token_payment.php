@@ -314,8 +314,12 @@ class MerchantWarriorTokenPayments_Mwarrior_Token_Payment extends Shop_PaymentTy
 
 			{
 
-				//throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
-				throw new Phpr_ApplicationException($response_fields['responseMessage']);
+				//Original code: throw new Phpr_ApplicationException("Transaction Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				
+				
+				//Make the error message more readable - removes things that only developers would understand from error messsage
+				$new_error_message = preg_replace("#[M][W]\s.\s\d\d\d.#",'', $response_fields['responseMessage']);
+				throw new Phpr_ApplicationException("Error: ".$new_error_message);
 
 			}
 
@@ -503,8 +507,12 @@ class MerchantWarriorTokenPayments_Mwarrior_Token_Payment extends Shop_PaymentTy
 
 		   {
 
-				//throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
-				throw new Phpr_ApplicationException($response_fields['responseMessage']);
+				//Original code: throw new Phpr_ApplicationException("Transaction Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				
+				
+				//Make the error message more readable - removes things that only developers would understand from error messsage
+				$new_error_message = preg_replace("#[M][W]\s.\s\d\d\d.#",'', $response_fields['responseMessage']);
+				throw new Phpr_ApplicationException("Error: ".$new_error_message);
 
 		   }
 
