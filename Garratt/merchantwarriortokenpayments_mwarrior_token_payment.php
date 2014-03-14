@@ -314,7 +314,8 @@ class MerchantWarriorTokenPayments_Mwarrior_Token_Payment extends Shop_PaymentTy
 
 			{
 
-				throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				//throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				throw new Phpr_ApplicationException($response_fields['responseMessage']);
 
 			}
 
@@ -502,7 +503,8 @@ class MerchantWarriorTokenPayments_Mwarrior_Token_Payment extends Shop_PaymentTy
 
 		   {
 
-			   throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				//throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+				throw new Phpr_ApplicationException($response_fields['responseMessage']);
 
 		   }
 
