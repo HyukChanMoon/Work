@@ -623,8 +623,8 @@
 				if ($status === false)
 
 				{
-
-					throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+					//throw new Phpr_ApplicationException("Hello Error: Payment Processor declined transaction: ".$response_fields['responseMessage']);
+					throw new Phpr_ApplicationException($response_fields['responseMessage']);
 					}
 
 					
